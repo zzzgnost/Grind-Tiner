@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Discord Grind Timer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: #313338;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Grotesk', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .card {
+    width: 340px;
+    background: #2b2d31;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .header {
+    background: #1e1f22;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #23a55a; }
+  .header span { color: #dbdee1; font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+  .body { padding: 24px; }
+  .ring-wrap { position: relative; width: 220px; margin: 0 auto 8px; }
+  svg { display: block; }
+  .ring-bg { fill: none; stroke: #1e1f22; }
+  .ring-fg { fill: none; stroke: #5865f2; stroke-linecap: round; transition: stroke-dashoffset 0.5s linear, stroke 0.3s; }
+  .ring-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .time-display {
+    font-family: 'DM Mono', monospace;
+    font-size: 44px;
+    font-weight: 500;
+    color: #dbdee1;
+    line-height: 1;
+    transition: color 0.3s;
+  }
+  .time-display.urgent { color: #ed4245; }
+  .status-label {
+    font-size: 11px;
+    color: #80848e;
+    margin-top: 4px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .alert-banner {
+    display: none;
+    background: rgba(237,66,69,0.12);
+    border: 1px solid #ed4245;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    text-align: center;
+    color: #ed4245;
+    font-size: 13px;
+    font-weight: 700;
+    animation: slideUp 0.2s ease;
+  }
+  .alert-banner.show { display: block; }
+  .controls { display: flex; gap: 8px; margin-bottom: 20px; }
+  .btn-start, .btn-pause, .btn-reset { border: none; border-radius: 4px; padding: 10px 0; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+  .btn-start { background: #5865f2; color: #fff; flex: 1; }
+  .btn-start:hover { background: #4752c4; }
+  .btn-pause { background: #4e5058; color: #fff; flex: 1; display: none; }
+  .btn-pause:hover { background: #6d6f78; }
+  .btn-reset { background: transparent; color: #ed4245; border: 1px solid #ed4245 !important; padding: 10px 20px; }
+  .btn-reset:hover { background: #ed4245; color: #fff; }
+  .section-label {
+    font-size: 11px; color: #80848e; font-weight: 700;
+    letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; align-items: center; }
+  .preset {
+    background: #2b2d31; border: 1px solid #3f4147; color: #b5bac1;
+    border-radius: 4px; padding: 6px 14px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; font-family: 'DM Mono', monospace;
+  }
+  .preset:hover, .preset.active { background: #5865f2; border-color: #5865f2; color: #fff; }
+  .custom-wrap { display: flex; gap: 4px; align-items: center; }
+  .custom-input {
+    background: #1e1f22; border: 1px solid #3f4147; color: #dbdee1;
+    border-radius: 4px; padding: 6px 10px; font-size: 12px;
+    font-family: 'DM Mono', monospace; width: 70px; outline: none;
+  }
+  .custom-input:focus { border-color: #5865f2; }
+  .btn-apply {
+    background: #2b2d31; border: 1px solid #3f4147; color: #b5bac1;
+    border-radius: 4px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+    font-family: 'DM Mono', monospace; transition: all 0.15s;
+  }
+  .btn-apply:hover { background: #5865f2; border-color: #5865f2; color: #fff; }
+  .toggle-row { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .toggle-track {
+    width: 36px; height: 20px; background: #4e5058;
+    border-radius: 10px; position: relative; transition: background 0.2s; flex-shrink: 0;
+  }
+  .toggle-track.on { background: #23a55a; }
+  .toggle-thumb {
+    width: 14px; height: 14px; background: #fff; border-radius: 50%;
+    position: absolute; top: 3px; left: 3px; transition: left 0.2s;
+  }
+  .toggle-track.on .toggle-thumb { left: 19px; }
+  .toggle-label { font-size: 13px; color: #b5bac1; font-weight: 500; }
+  @keyframes flash { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  @keyframes slideUp { from{transform:translateY(6px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .flashing { animation: flash 0.4s 4; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="dot"></div>
+    <span>Discord Grind Timer</span>
+  </div>
+  <div class="body">
+    <div class="ring-wrap">
+      <svg id="ring" width="220" height="220" style="transform:rotate(-90deg)">
+        <circle class="ring-bg" cx="110" cy="110" r="105" stroke-width="10"/>
+        <circle class="ring-fg" id="arc" cx="110" cy="110" r="105" stroke-width="10"
+          stroke-dasharray="659.73" stroke-dashoffset="0"/>
+      </svg>
+      <div class="ring-center">
+        <div class="time-display" id="timeDisplay">1:00</div>
+        <div class="status-label" id="statusLabel">paused</div>
+      </div>
+    </div>
+
+    <div class="alert-banner" id="alertBanner">⚔️ Send your Discord message!</div>
+
+    <div class="controls">
+      <button class="btn-start" id="btnStart" onclick="startTimer()">▶ Start</button>
+      <button class="btn-pause" id="btnPause" onclick="pauseTimer()">⏸ Pause</button>
+      <button class="btn-reset" onclick="resetTimer()">↺ Reset</button>
+    </div>
+
+    <div class="section-label">Interval</div>
+    <div class="presets" id="presets">
+      <button class="preset" data-val="30" onclick="setPreset(30)">30s</button>
+      <button class="preset active" data-val="60" onclick="setPreset(60)">1m</button>
+      <button class="preset" data-val="90" onclick="setPreset(90)">1.5m</button>
+      <button class="preset" data-val="120" onclick="setPreset(120)">2m</button>
+      <button class="preset" data-val="180" onclick="setPreset(180)">3m</button>
+      <button class="preset" data-val="300" onclick="setPreset(300)">5m</button>
+      <div class="custom-wrap">
+        <input class="custom-input" id="customInput" type="number" placeholder="sec" min="1" max="3600" />
+        <button class="btn-apply" onclick="applyCustom()">✓</button>
+      </div>
+    </div>
+
+    <div class="toggle-row" onclick="toggleAuto()">
+      <div class="toggle-track on" id="toggleTrack"><div class="toggle-thumb"></div></div>
+      <span class="toggle-label">Auto-restart after alert</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  const CIRC = 2 * Math.PI * 105;
+  let duration = 60, remaining = 60, running = false, autoReset = true;
+  let intervalId = null, audioCtx = null;
+
+  function fmt(s) {
+    const m = Math.floor(s / 60), sec = s % 60;
+    return `${m}:${sec.toString().padStart(2,'0')}`;
+  }
+
+  function updateUI() {
+    const progress = remaining / duration;
+    const offset = CIRC * (1 - progress);
+    const arc = document.getElementById('arc');
+    arc.style.strokeDashoffset = offset;
+    arc.style.stroke = progress < 0.15 ? '#ed4245' : progress < 0.35 ? '#fee75c' : '#5865f2';
+
+    document.getElementById('timeDisplay').textContent = fmt(remaining);
+    document.getElementById('statusLabel').textContent =
+      running ? 'grinding...' : remaining === 0 ? 'done' : 'paused';
+
+    const td = document.getElementById('timeDisplay');
+    td.classList.toggle('urgent', progress < 0.15);
+  }
+
+  function playBeep() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.15, 0.3].forEach(t => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.frequency.value = 880; osc.type = 'square';
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime + t);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + t + 0.12);
+        osc.start(audioCtx.currentTime + t);
+        osc.stop(audioCtx.currentTime + t + 0.12);
+      });
+    } catch(e) {}
+  }
+
+  function fireAlert() {
+    playBeep();
+    const td = document.getElementById('timeDisplay');
+    td.classList.add('flashing');
+    setTimeout(() => td.classList.remove('flashing'), 1800);
+    const banner = document.getElementById('alertBanner');
+    banner.classList.add('show');
+    setTimeout(() => banner.classList.remove('show'), 3000);
+    document.getElementById('statusLabel').textContent = '🔔 MSG NOW';
+  }
+
+  function tick() {
+    remaining--;
+    if (remaining <= 0) {
+      fireAlert();
+      if (autoReset) {
+        remaining = duration;
+      } else {
+        remaining = 0;
+        stopTimer();
+      }
+    }
+    updateUI();
+  }
+
+  function startTimer() {
+    if (running) return;
+    if (remaining === 0) remaining = duration;
+    running = true;
+    intervalId = setInterval(tick, 1000);
+    document.getElementById('btnStart').style.display = 'none';
+    document.getElementById('btnPause').style.display = 'flex';
+    document.getElementById('statusLabel').textContent = 'grinding...';
+    updateUI();
+  }
+
+  function pauseTimer() {
+    running = false;
+    clearInterval(intervalId);
+    document.getElementById('btnStart').style.display = 'flex';
+    document.getElementById('btnPause').style.display = 'none';
+    document.getElementById('statusLabel').textContent = 'paused';
+  }
+
+  function stopTimer() {
+    running = false;
+    clearInterval(intervalId);
+    document.getElementById('btnStart').style.display = 'flex';
+    document.getElementById('btnPause').style.display = 'none';
+    updateUI();
+  }
+
+  function resetTimer() {
+    stopTimer();
+    remaining = duration;
+    document.getElementById('alertBanner').classList.remove('show');
+    updateUI();
+  }
+
+  function setPreset(v) {
+    stopTimer();
+    duration = v; remaining = v;
+    document.querySelectorAll('.preset').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.val) === v);
+    });
+    updateUI();
+  }
+
+  function applyCustom() {
+    const v = parseInt(document.getElementById('customInput').value);
+    if (v > 0 && v <= 3600) {
+      document.querySelectorAll('.preset').forEach(b => b.classList.remove('active'));
+      stopTimer();
+      duration = v; remaining = v;
+      document.getElementById('customInput').value = '';
+      updateUI();
+    }
+  }
+
+  function toggleAuto() {
+    autoReset = !autoReset;
+    document.getElementById('toggleTrack').classList.toggle('on', autoReset);
+  }
+
+  document.getElementById('customInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') applyCustom();
+  });
+
+  updateUI();
+</script>
+</body>
+</html>
